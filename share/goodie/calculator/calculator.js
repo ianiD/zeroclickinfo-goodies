@@ -112,6 +112,7 @@ DDH.calculator = DDH.calculator || {};
             .replace(/log(?:\(([^)]+)\)|\s(\d+))/g, RewriteExpression.log10)
             .replace(/ln\(?([^)]+)\)?/g, RewriteExpression.log)
             .replace(/(sin|cos|tan)\(?([^)]+)\)?/g, RewriteExpression.trig)
+            .replace(/(\d+)\s?mod(?:ulo)?\s?(\d+)?/g, 'mod($1,$2)')
 
             // 6. handles constants
             .replace(/π/g, '(pi)')
@@ -452,16 +453,8 @@ DDH.calculator = DDH.calculator || {};
 
         isExponential = false;
 
-        var normalizedExpression;
-        // a workaround for the mathjs simplify/log|ln bug
-        if(/log|ln|!/.test(display.value)) {
-            normalizedExpression = normalizeExpression(display.value)
-        } else {
-            // helps with rounding errors
-            normalizedExpression = math.simplify(
-                normalizeExpression(display.value)
-            ).toString()                
-        }
+        var normalizedExpression = normalizeExpression(display.value);
+        console.log(normalizedExpression);
 
         try {
             var total = math.eval(
@@ -485,28 +478,22 @@ DDH.calculator = DDH.calculator || {};
                 return false;
             }
         }
-
-        if(Utils.isNan(total)) {
-            display.value = "Error";
-            setCButtonState("C");
-            return false;
-        }
+        ExpressionParser.setExpression(display.value);
+        evaluated = true;
+        setCButtonState("C");
+        yRootState = false;
 
         // show the user how the calculator evaluated it
-        var tmp_expression = normalizeExpression(display.value);
         if(Utils.isInfinite(total)) {
-            ExpressionParser.setExpression(tmp_expression);
             Ledger.addToHistory(display.value, DDG.commifyNumber(total));
             display.value = "Infinity";
+        } else if(Utils.isNan(total)) {
+            display.value = "Error";
         } else {
-            ExpressionParser.setExpression(tmp_expression);
             Ledger.addToHistory(display.value, DDG.commifyNumber(total));
             display.value = total;
         }
 
-        evaluated = true;
-        setCButtonState("C");
-        yRootState = false;
     }
 
     /**
@@ -547,6 +534,10 @@ DDH.calculator = DDH.calculator || {};
             if (ExpressionParser.getExpressionLength() > 1 && ( Utils.isMathFunction(display.value.substr(-4, 4)) || Utils.isMathFunction(display.value.substr(-3, 3)))) {
                 ExpressionParser.backspace(4);
                 ParenManager.decrementTotal();
+
+            // if last element is an open paren, backspace 1
+            } else if(display.value.substr(-2, 2) === "% ") {
+                ExpressionParser.backspace(2);
 
             // if last element is an open paren, backspace 1
             } else if(display.value.substr(-1, 1) === "(") {
@@ -657,7 +648,7 @@ DDH.calculator = DDH.calculator || {};
         var rewritten = false;
 
         // resets the display
-        if(display.value === "Error" || display.value === "Infinity" || display.value === "-Infinity") {
+        if(display.value === "Error" ||  display.value === "Infinity" || display.value === "-Infinity") {
             display.value = "";
         }
 
@@ -820,7 +811,7 @@ DDH.calculator = DDH.calculator || {};
                 display.value = display.value.substring(0, display.value.length - 1);
                 display.value += element + " ";
             // if factorial append 1 blank space
-            } else if(element === "!") {
+            } else if(element === "!" || element === "%") {
                 display.value += element + " ";
             } else {
                 display.value += element;
@@ -1013,6 +1004,7 @@ DDH.calculator = DDH.calculator || {};
                      * we try to evaluate the expression, else we set the calculator
                      * to 0.
                      */
+                     console.log(processedQuery);
                     if(displayValue !== "0") {
                         expressionFromSearchBar = true;
                         calculateFromSearchBar(processedQuery);
